@@ -1,0 +1,49 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #0d1117;
+  color: #e6edf3;
+  min-height: 100vh;
+}
+#app { max-width: 1280px; margin: 0 auto; padding: 12px; }
+header { text-align: center; padding: 12px 0 8px; }
+h1 {
+  font-size: 2rem;
+  background: linear-gradient(90deg, #58a6ff, #3fb950, #f778ba);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.tagline { color: #8b949e; font-size: 0.9rem; margin-top: 4px; }
+.toolbar {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 12px;
+}
+.toolbar button, .toolbar select, .toolbar input[type=range] {
+  background: #21262d; color: #e6edf3; border: 1px solid #30363d;
+  border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.9rem;
+}
+.toolbar button:hover { background: #30363d; border-color: #58a6ff; }
+.toolbar label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #8b949e; }
+.main { display: flex; gap: 12px; flex-wrap: wrap; }
+#canvas {
+  background: #010409; border: 1px solid #30363d; border-radius: 8px;
+  flex: 1 1 640px; max-width: 100%; height: auto; cursor: crosshair;
+}
+#sidebar { flex: 0 0 300px; display: flex; flex-direction: column; gap: 10px; }
+.panel {
+  background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;
+}
+.panel h3 { font-size: 0.95rem; color: #58a6ff; margin-bottom: 8px; }
+#stats { font-family: ui-monospace, monospace; font-size: 0.85rem; line-height: 1.6; }
+#brain-canvas { width: 100%; background: #0d1117; border-radius: 4px; }
+.hint { font-size: 0.75rem; color: #8b949e; margin-top: 6px; }
+#pop-list { max-height: 140px; overflow-y: auto; font-size: 0.8rem; font-family: ui-monospace, monospace; }
+.pop-item { padding: 2px 0; border-bottom: 1px solid #21262d; }
+.pop-item.best { color: #3fb950; }
+footer { text-align: center; color: #484f58; font-size: 0.75rem; padding: 16px 0 8px; }
+code { background: #21262d; padding: 1px 4px; border-radius: 3px; font-size: 0.85em; }
+@media (max-width: 900px) {
+  #sidebar { flex: 1 1 100%; }
+}
