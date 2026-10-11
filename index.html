@@ -1,74 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NeuralEv – Neural Omni Evolution</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NeuralEv – Neural Omni Evolution</title>
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<div id="app">
-  <header>
-    <h1>NeuralEv</h1>
-    <p class="tagline">Stick figure driven by evolving neural connections · Generations · Scorer · Multi-Mode</p>
-  </header>
+  <div id="app">
+    <header>
+      <h1>NeuralEv</h1>
+      <p class="tagline">Stick figure driven by evolving neural connections · Generations · Scorer · Multi-Mode · Editor</p>
+    </header>
 
-  <div class="toolbar">
-    <button id="btn-play" title="Play / Pause">▶ Play</button>
-    <button id="btn-step" title="Single step">Step</button>
-    <button id="btn-reset" title="Reset population">Reset</button>
-    <button id="btn-newgen" title="Force next generation">Next Gen</button>
-    <label>Mode
-      <select id="mode-select">
-        <option value="walk">Walk Right</option>
-        <option value="balance">Balance</option>
-        <option value="jump">Jump Height</option>
-        <option value="reach">Reach Target</option>
-        <option value="dance">Dance Pattern</option>
-        <option value="climb">Climb</option>
-        <option value="free">Free Play (edit)</option>
-      </select>
-    </label>
-    <label>Speed <input type="range" id="speed" min="0.25" max="8" step="0.25" value="1"></label>
-    <label>Mutation <input type="range" id="mutation" min="0.01" max="0.4" step="0.01" value="0.08"></label>
-    <button id="btn-export">Export .nom</button>
-    <button id="btn-import">Import .nom</button>
-    <input type="file" id="file-import" accept=".nom,.neural-omni.nom" hidden>
-  </div>
+    <div class="toolbar">
+      <button id="btn-play" class="primary">▶ Play</button>
+      <button id="btn-step">Step</button>
+      <button id="btn-reset">Reset</button>
+      <button id="btn-newgen">Next Gen</button>
+      <label>Mode
+        <select id="mode-select">
+          <option value="walk">Walk Right</option>
+          <option value="balance">Balance</option>
+          <option value="jump">Jump Height</option>
+          <option value="reach">Reach Target</option>
+          <option value="dance">Dance Pattern</option>
+          <option value="climb">Climb</option>
+          <option value="free">Free Play + Editor</option>
+        </select>
+      </label>
+      <label>Speed <input type="range" id="speed" min="0.25" max="6" step="0.25" value="1"></label>
+      <label>Mutation <input type="range" id="mutation" min="0.01" max="0.35" step="0.01" value="0.07"></label>
+      <button id="btn-export">Export .nom</button>
+      <button id="btn-import">Import .nom</button>
+      <input type="file" id="file-import" accept=".nom,.neural-omni.nom" hidden>
+    </div>
 
-  <div class="main">
-    <canvas id="canvas" width="960" height="540"></canvas>
-    <aside id="sidebar">
-      <div class="panel">
-        <h3>Status</h3>
-        <div id="stats">
-          Generation: <span id="gen">1</span><br>
-          Best Score: <span id="best">0</span><br>
-          Avg Score: <span id="avg">0</span><br>
-          Alive: <span id="alive">0</span><br>
-          Time: <span id="time">0.0</span>s
+    <div class="main">
+      <div class="canvas-wrap">
+        <canvas id="canvas" width="960" height="540"></canvas>
+        <div id="hud">Gen <span id="hud-gen">1</span> · Best <span id="hud-best">0</span></div>
+      </div>
+
+      <aside id="sidebar">
+        <div class="panel">
+          <h3>Status</h3>
+          <div id="stats" class="mono">
+            Generation: <span id="gen">1</span><br>
+            Best Score: <span id="best">0</span><br>
+            Avg Score: <span id="avg">0</span><br>
+            Alive: <span id="alive">0</span><br>
+            Time: <span id="time">0.0</span>s
+          </div>
         </div>
-      </div>
-      <div class="panel">
-        <h3>Neural Connections</h3>
-        <canvas id="brain-canvas" width="280" height="220"></canvas>
-        <p class="hint">Click nodes or edges in Free Play to edit weights.</p>
-      </div>
-      <div class="panel">
-        <h3>Population</h3>
-        <div id="pop-list"></div>
-      </div>
-      <div class="panel">
-        <h3>About</h3>
-        <p>Stick figure is controlled by a feed-forward neural net. Inputs = joint angles & velocities + sensors. Outputs = joint torques. High scorers reproduce with mutation. File format <code>.neural-omni.nom</code> is binary-encoded (not human-readable).</p>
-      </div>
-    </aside>
+
+        <div class="panel">
+          <h3>Neural Connections</h3>
+          <canvas id="brain-canvas" width="280" height="240"></canvas>
+          <div id="editor-panel" class="editor hidden">
+            <p class="hint">Click a connection (line) to select. Adjust weight:</p>
+            <input type="range" id="weight-slider" min="-2" max="2" step="0.05" value="0">
+            <span id="weight-val" class="mono">0.00</span>
+            <button id="btn-randomize-edge" class="small">Randomize selected</button>
+            <button id="btn-zero-edge" class="small">Zero</button>
+          </div>
+          <p class="hint" id="editor-hint">Switch to <b>Free Play + Editor</b> to edit weights.</p>
+        </div>
+
+        <div class="panel">
+          <h3>Population</h3>
+          <div id="pop-list" class="mono"></div>
+        </div>
+
+        <div class="panel">
+          <h3>About</h3>
+          <p class="small">Stick figure = multi-segment body controlled by neural net torques. High scorers reproduce. File <code>.neural-omni.nom</code> is binary &amp; obfuscated. Agents stay inside the screen.</p>
+        </div>
+      </aside>
+    </div>
+
+    <footer>NeuralEv · modular · stable physics · screen bounds · neural editor</footer>
   </div>
 
-  <footer>
-    NeuralEv · Neuroevolution · Export/Import · GitHub Pages
-  </footer>
-</div>
-<script src="app.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/stick.js"></script>
+  <script src="js/population.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>
