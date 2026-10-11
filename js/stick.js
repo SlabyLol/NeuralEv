@@ -1,7 +1,7 @@
-/** NeuralEv – Grounded leg locomotion
- *  On ground: hip height comes only from leg length.
- *  Horizontal move only when a planted foot stays fixed and joints change.
- *  No upward force on ground → no flying.
+/** NeuralEv – Grounded walking
+ *  - Stays on ground (hip height from legs, no upward force)
+ *  - Moves ONLY when planted legs swing (angular velocity → push)
+ *  - In air: gravity only
  */
 
 const GROUND_Y = 500;
@@ -23,13 +23,12 @@ class Stick {
   }
 
   reset() {
-    this.a = [0.06, 0, 0.35, -0.28, 0.22, 0.18, 0.2, -0.2];
+    this.a = [0.05, 0, 0.4, -0.3, 0.25, 0.2, 0.2, -0.2];
     this.av = [0, 0, 0, 0, 0, 0, 0, 0];
 
     const legs = this.computeLegs();
-    const standH = Math.max(legs.footL.y, legs.footR.y);
     this.x = 160;
-    this.y = GROUND_Y - standH;
+    this.y = GROUND_Y - Math.max(legs.footL.y, legs.footR.y);
     this.vx = 0;
     this.vy = 0;
 
@@ -46,9 +45,6 @@ class Stick {
     this.hitHelp = 0;
     this.hitDeath = false;
     this.airborne = false;
-
-    this.prevFootL = { x: legs.footL.x, y: legs.footL.y };
-    this.prevFootR = { x: legs.footR.x, y: legs.footR.y };
   }
 
   computeLegs() {
@@ -109,107 +105,101 @@ class Stick {
     if (!this.alive) return;
     this.age += dt;
 
-    // --- 1. Network updates joint angles only ---
+    // 1) Network drives joints (legs must move for locomotion)
     const out = this.net.forward(this.sensors(worldObjects));
-    const scale = [0.03, 0.015, 0.12, 0.12, 0.11, 0.11, 0.05, 0.05];
+    // Stronger leg motors so walking is visible
+    const scale = [0.04, 0.02, 0.18, 0.18, 0.16, 0.16, 0.07, 0.07];
     for (let i = 0; i < 8; i++) {
       this.av[i] += out[i] * scale[i] * 60 * dt;
-      this.av[i] *= 0.83;
+      this.av[i] *= 0.82;
       this.a[i] += this.av[i] * dt;
     }
 
-    this.a[0] = clamp(this.a[0], -0.45, 0.45);
-    this.a[1] = clamp(this.a[1], -0.2, 0.2);
-    this.a[2] = clamp(this.a[2], -0.8, 1.0);
-    this.a[3] = clamp(this.a[3], -0.8, 1.0);
-    this.a[4] = clamp(this.a[4], 0.05, 1.3);
-    this.a[5] = clamp(this.a[5], 0.05, 1.3);
-    this.a[6] = clamp(this.a[6], -1.0, 1.0);
-    this.a[7] = clamp(this.a[7], -1.0, 1.0);
+    this.a[0] = clamp(this.a[0], -0.5, 0.5);
+    this.a[1] = clamp(this.a[1], -0.25, 0.25);
+    this.a[2] = clamp(this.a[2], -0.9, 1.1);
+    this.a[3] = clamp(this.a[3], -0.9, 1.1);
+    this.a[4] = clamp(this.a[4], 0.05, 1.35);
+    this.a[5] = clamp(this.a[5], 0.05, 1.35);
+    this.a[6] = clamp(this.a[6], -1.1, 1.1);
+    this.a[7] = clamp(this.a[7], -1.1, 1.1);
 
     const legs = this.computeLegs();
 
-    // Support surface
+    // Support (ground / platform)
     let supportY = GROUND_Y;
     if (worldObjects) {
       for (const o of worldObjects) {
         if (!o.active || o.type !== 'platform') continue;
         const top = o.y - o.h / 2;
         if (this.x > o.x - o.w / 2 && this.x < o.x + o.w / 2) {
-          const approxFoot = this.y + Math.max(legs.footL.y, legs.footR.y);
-          if (approxFoot >= top - 8 && approxFoot <= top + 18) supportY = top;
+          const footApprox = this.y + Math.max(legs.footL.y, legs.footR.y);
+          if (footApprox >= top - 8 && footApprox <= top + 18) supportY = top;
         }
       }
     }
 
-    // --- 2. Were feet on ground last frame? ---
-    const wasL = (this.y + this.prevFootL.y) >= supportY - 5;
-    const wasR = (this.y + this.prevFootR.y) >= supportY - 5;
-    const wasGrounded = wasL || wasR;
+    // Which feet reach the ground?
+    // (use geometry: if hip + footLocalY is at/below support, foot is down)
+    const tryL = this.y + legs.footL.y;
+    const tryR = this.y + legs.footR.y;
+    // Before resolving height, estimate contact from previous grounded state
+    let leftDown = !this.airborne && tryL >= supportY - 6;
+    let rightDown = !this.airborne && tryR >= supportY - 6;
 
-    // --- 3. HORIZONTAL only from locked feet (NO vertical shift from legs) ---
-    let shiftX = 0;
-    let nPlant = 0;
-    if (wasL) {
-      shiftX -= (legs.footL.x - this.prevFootL.x);
-      nPlant++;
-    }
-    if (wasR) {
-      shiftX -= (legs.footR.x - this.prevFootR.x);
-      nPlant++;
-    }
-    if (nPlant > 0) shiftX /= nPlant;
-
-    if (wasGrounded && !this.airborne) {
-      // Grounded walk: only slide horizontally from foot lock
-      this.x += shiftX;
-      this.vx = shiftX / Math.max(dt, 0.001) / 60;
-
-      // Hip height FIXED by current leg geometry (whichever planted foot is lowest)
-      // foot local y is distance below hip → hip = support - footLocalY
-      let hipFromLegs = null;
-      if (wasL) hipFromLegs = supportY - legs.footL.y;
-      if (wasR) {
-        const hR = supportY - legs.footR.y;
-        hipFromLegs = hipFromLegs === null ? hR : Math.min(hipFromLegs, hR);
-      }
-      // min = the foot that is more extended sets a lower hip? 
-      // Actually: larger foot.y means foot farther down → hip should be higher up (smaller y).
-      // supportY - foot.y: larger foot.y → smaller hip y (higher on screen). Correct for standing tall.
-      // When both planted, use the MAX foot.y (most extended) so both can reach ground:
-      // hipY = supportY - max(footY of planted) keeps the longer leg's foot on ground;
-      // the shorter leg's foot will be slightly above ground.
-      let maxFootY = -Infinity;
-      if (wasL) maxFootY = Math.max(maxFootY, legs.footL.y);
-      if (wasR) maxFootY = Math.max(maxFootY, legs.footR.y);
+    if (!this.airborne) {
+      // ===== GROUNDED =====
+      // Hip height ONLY from legs – never flies up from forces
+      const maxFootY = Math.max(legs.footL.y, legs.footR.y);
       this.y = supportY - maxFootY;
-
-      // CRITICAL: no upward velocity while grounded
       this.vy = 0;
-      this.airborne = false;
 
-      // Jump only in jump mode via strong extension impulse
+      // Recompute contact after height fix
+      leftDown = (this.y + legs.footL.y) >= supportY - 5;
+      rightDown = (this.y + legs.footR.y) >= supportY - 5;
+
+      // ===== HORIZONTAL PUSH FROM LEG SWING =====
+      // Planted foot: swinging thigh backward (negative av) pushes body forward
+      let push = 0;
+      const GAIN = 4.5;
+
+      if (leftDown) {
+        push += -this.av[2] * GAIN;       // thigh L
+        push += -this.av[4] * 0.8;      // shin L
+      }
+      if (rightDown) {
+        push += -this.av[3] * GAIN;
+        push += -this.av[5] * 0.8;
+      }
+
+      // If neither foot registered, still allow tiny push from any leg motion
+      // so random nets can stumble into walking instead of freezing
+      if (!leftDown && !rightDown) {
+        push += (-this.av[2] - this.av[3]) * 0.5;
+      }
+
+      this.vx += push * dt * 60;
+      this.vx *= 0.88; // ground friction
+      this.vx = clamp(this.vx, -6.5, 6.5);
+      this.x += this.vx * dt * 60;
+
+      // Jump only in jump mode
       if (mode === 'jump') {
         const ext =
           Math.max(0, -this.av[2]) + Math.max(0, -this.av[3]) +
           Math.max(0, -this.av[4]) + Math.max(0, -this.av[5]);
-        if (ext > 2.5) {
-          this.vy = -Math.min(8, ext * 1.6);
+        if (ext > 2.4) {
+          this.vy = -Math.min(8, ext * 1.5);
           this.airborne = true;
-          this.onGround = false;
-          this.leftFootDown = false;
-          this.rightFootDown = false;
         }
       }
     } else {
-      // Airborne: gravity only, zero control
-      this.airborne = true;
-      this.vy += 0.85 * dt * 60; // strong gravity
+      // ===== AIR =====
+      this.vy += 0.9 * dt * 60;
       this.x += this.vx * dt * 60;
       this.y += this.vy * dt * 60;
       this.vx *= 0.997;
 
-      // Land when lowest foot hits support
       const low = this.y + Math.max(legs.footL.y, legs.footR.y);
       if (low >= supportY && this.vy >= 0) {
         this.y = supportY - Math.max(legs.footL.y, legs.footR.y);
@@ -218,14 +208,10 @@ class Stick {
       }
     }
 
-    // Contact flags for drawing / sensors
-    const legs2 = this.computeLegs();
-    this.leftFootDown = !this.airborne && (this.y + legs2.footL.y) >= supportY - 5;
-    this.rightFootDown = !this.airborne && (this.y + legs2.footR.y) >= supportY - 5;
+    this.leftFootDown = !this.airborne && (this.y + legs.footL.y) >= supportY - 5;
+    this.rightFootDown = !this.airborne && (this.y + legs.footR.y) >= supportY - 5;
     this.onGround = this.leftFootDown || this.rightFootDown;
-
-    this.prevFootL = { x: legs2.footL.x, y: legs2.footL.y };
-    this.prevFootR = { x: legs2.footR.x, y: legs2.footR.y };
+    if (this.onGround) this.airborne = false;
 
     // Bounds
     if (this.x < MARGIN) { this.x = MARGIN; this.vx = 0; }
@@ -267,8 +253,6 @@ class Stick {
         this.vy = -9;
         this.airborne = true;
         this.onGround = false;
-        this.leftFootDown = false;
-        this.rightFootDown = false;
         this.score += 8;
       }
     }
@@ -278,9 +262,11 @@ class Stick {
     switch (mode) {
       case 'walk': {
         const progress = Math.max(0, this.x - 160);
-        this.score = progress * 1.4;
-        if (this.onGround) this.score += 0.35;
-        if (this.leftFootDown !== this.rightFootDown) this.score += 0.25;
+        this.score = progress * 1.5;
+        if (this.onGround) this.score += 0.4;
+        if (this.leftFootDown !== this.rightFootDown) this.score += 0.3;
+        // reward actual leg motion
+        this.score += (Math.abs(this.av[2]) + Math.abs(this.av[3])) * 0.05;
         if (this.x > this.maxX) this.maxX = this.x;
         break;
       }
