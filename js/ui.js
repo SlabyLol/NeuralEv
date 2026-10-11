@@ -1,14 +1,14 @@
-/** NeuralEv – UI, brain visualization, neural editor */
+/** NeuralEv – UI, brain view, neural editor, object tools */
 
 class UI {
-  constructor(pop) {
+  constructor(pop, objMan) {
     this.pop = pop;
+    this.obj = objMan;
     this.mode = 'walk';
     this.selectedEdge = -1;
     this.brainCanvas = document.getElementById('brain-canvas');
     this.bctx = this.brainCanvas.getContext('2d');
-    this.edgeHitboxes = []; // for click detection
-
+    this.edgeHitboxes = [];
     this.bind();
   }
 
@@ -19,22 +19,33 @@ class UI {
         window.NeuralEv.running ? '⏸ Pause' : '▶ Play';
     };
     document.getElementById('btn-step').onclick = () => {
-      this.pop.step(0.04, this.mode);
+      if (this.pop.current && this.pop.current.alive) {
+        this.pop.step(0.04, this.mode, this.obj.list);
+        this.obj.update(0.04);
+      }
       this.update();
     };
     document.getElementById('btn-reset').onclick = () => {
       this.pop.init();
+      this.obj.resetFalls();
       window.NeuralEv.simTime = 0;
       this.update();
     };
     document.getElementById('btn-newgen').onclick = () => {
-      this.pop.nextGeneration(window.NeuralEv.mutationRate);
+      // force finish remaining trials with 0 and evolve
+      while (this.pop.trialIndex < POP_SIZE - 1) {
+        this.pop.scores[this.pop.trialIndex] = this.pop.current ? this.pop.current.score : 0;
+        this.pop.trialIndex++;
+      }
+      this.pop.onDeath(window.NeuralEv.mutationRate);
+      this.obj.resetFalls();
       window.NeuralEv.simTime = 0;
       this.update();
     };
     document.getElementById('mode-select').onchange = e => {
       this.mode = e.target.value;
-      this.pop.resetAll();
+      if (this.pop.current) this.pop.current.reset();
+      this.obj.resetFalls();
       window.NeuralEv.simTime = 0;
       this.toggleEditor();
       this.update();
@@ -57,30 +68,45 @@ class UI {
       }
     };
 
-    // Brain canvas click → select edge
+    // Object tools
+    document.querySelectorAll('.obj-btn').forEach(btn => {
+      btn.onclick = () => {
+        const t = btn.dataset.type;
+        this.obj.setTool(t);
+        document.querySelectorAll('.obj-btn').forEach(b => b.classList.remove('active'));
+        if (this.obj.placeType) btn.classList.add('active');
+      };
+    });
+    document.getElementById('btn-clear-objects').onclick = () => {
+      this.obj.clear();
+      this.update();
+    };
+
     this.brainCanvas.addEventListener('click', e => this.onBrainClick(e));
 
-    // Weight slider
     const slider = document.getElementById('weight-slider');
     slider.oninput = () => {
-      if (this.selectedEdge < 0) return;
+      if (this.selectedEdge < 0 || !this.pop.current) return;
       const v = +slider.value;
       document.getElementById('weight-val').textContent = v.toFixed(2);
-      const agent = this.pop.selectedAgent;
-      if (agent) agent.net.setEdgeWeight(this.selectedEdge, v);
+      this.pop.current.net.setEdgeWeight(this.selectedEdge, v);
+      // also update genome so it persists for this trial
+      this.pop.genomes[this.pop.trialIndex].setEdgeWeight(this.selectedEdge, v);
       this.drawBrain();
     };
     document.getElementById('btn-randomize-edge').onclick = () => {
-      if (this.selectedEdge < 0) return;
+      if (this.selectedEdge < 0 || !this.pop.current) return;
       const v = (Math.random() * 2 - 1) * 1.2;
-      this.pop.selectedAgent.net.setEdgeWeight(this.selectedEdge, v);
+      this.pop.current.net.setEdgeWeight(this.selectedEdge, v);
+      this.pop.genomes[this.pop.trialIndex].setEdgeWeight(this.selectedEdge, v);
       slider.value = v;
       document.getElementById('weight-val').textContent = v.toFixed(2);
       this.drawBrain();
     };
     document.getElementById('btn-zero-edge').onclick = () => {
-      if (this.selectedEdge < 0) return;
-      this.pop.selectedAgent.net.setEdgeWeight(this.selectedEdge, 0);
+      if (this.selectedEdge < 0 || !this.pop.current) return;
+      this.pop.current.net.setEdgeWeight(this.selectedEdge, 0);
+      this.pop.genomes[this.pop.trialIndex].setEdgeWeight(this.selectedEdge, 0);
       slider.value = 0;
       document.getElementById('weight-val').textContent = '0.00';
       this.drawBrain();
@@ -96,20 +122,16 @@ class UI {
   onBrainClick(e) {
     if (this.mode !== 'free') return;
     const rect = this.brainCanvas.getBoundingClientRect();
-    const scaleX = this.brainCanvas.width / rect.width;
-    const scaleY = this.brainCanvas.height / rect.height;
-    const mx = (e.clientX - rect.left) * scaleX;
-    const my = (e.clientY - rect.top) * scaleY;
-
+    const mx = (e.clientX - rect.left) * (this.brainCanvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (this.brainCanvas.height / rect.height);
     let best = -1, bestD = 12;
     for (const hb of this.edgeHitboxes) {
-      // distance to line segment
       const d = distToSegment(mx, my, hb.x1, hb.y1, hb.x2, hb.y2);
       if (d < bestD) { bestD = d; best = hb.idx; }
     }
     this.selectedEdge = best;
-    if (best >= 0) {
-      const w = this.pop.selectedAgent.net.getEdgeWeight(best);
+    if (best >= 0 && this.pop.current) {
+      const w = this.pop.current.net.getEdgeWeight(best);
       document.getElementById('weight-slider').value = w;
       document.getElementById('weight-val').textContent = w.toFixed(2);
     }
@@ -118,19 +140,15 @@ class UI {
 
   drawBrain() {
     const ctx = this.bctx;
-    const W = this.brainCanvas.width;
-    const H = this.brainCanvas.height;
+    const W = this.brainCanvas.width, H = this.brainCanvas.height;
     ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, 0, W, H);
-
-    const agent = this.pop.selectedAgent;
-    if (!agent) return;
-    const net = agent.net;
+    if (!this.pop.current) return;
+    const net = this.pop.current.net;
 
     const layers = [INPUTS, HIDDEN, OUTPUTS];
     const xs = [36, 140, 244];
     const nodePos = [];
-
     for (let L = 0; L < 3; L++) {
       const n = layers[L];
       const pos = [];
@@ -146,7 +164,6 @@ class UI {
     }
 
     this.edgeHitboxes = [];
-    // Input → Hidden
     for (let i = 0; i < INPUTS; i++) {
       for (let j = 0; j < HIDDEN; j++) {
         const idx = i * HIDDEN + j;
@@ -157,7 +174,6 @@ class UI {
         this.edgeHitboxes.push({ x1, y1, x2, y2, idx });
       }
     }
-    // Hidden → Output
     const base = INPUTS * HIDDEN + HIDDEN;
     for (let j = 0; j < HIDDEN; j++) {
       for (let k = 0; k < OUTPUTS; k++) {
@@ -169,7 +185,6 @@ class UI {
         this.edgeHitboxes.push({ x1, y1, x2, y2, idx });
       }
     }
-
     ctx.fillStyle = '#8b949e';
     ctx.font = '10px sans-serif';
     ctx.fillText('In', 28, 12);
@@ -182,38 +197,36 @@ class UI {
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.strokeStyle = w >= 0 ? '#3fb950' : '#f85149';
-    ctx.globalAlpha = selected ? 0.95 : Math.min(0.55, 0.15 + Math.abs(w) * 0.35);
-    ctx.lineWidth = selected ? 2.8 : Math.min(2.2, 0.4 + Math.abs(w) * 1.2);
+    ctx.globalAlpha = selected ? 0.95 : Math.min(0.55, 0.12 + Math.abs(w) * 0.35);
+    ctx.lineWidth = selected ? 2.8 : Math.min(2.2, 0.4 + Math.abs(w) * 1.1);
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
 
   update() {
-    const st = this.pop.stats();
+    const st = this.pop.stats;
     document.getElementById('gen').textContent = st.gen;
+    document.getElementById('trial').textContent = st.trial;
+    document.getElementById('popsize').textContent = st.pop;
+    document.getElementById('score').textContent = st.score.toFixed(1);
     document.getElementById('best').textContent = st.best.toFixed(1);
-    document.getElementById('avg').textContent = st.avg.toFixed(1);
-    document.getElementById('alive').textContent = st.alive;
+    document.getElementById('bestever').textContent = st.bestEver.toFixed(1);
     document.getElementById('time').textContent = window.NeuralEv.simTime.toFixed(1);
+    document.getElementById('alive').textContent = st.alive ? 'yes' : 'DEAD → next';
     document.getElementById('hud-gen').textContent = st.gen;
-    document.getElementById('hud-best').textContent = st.best.toFixed(1);
+    document.getElementById('hud-trial').textContent = st.trial;
+    document.getElementById('hud-pop').textContent = st.pop;
+    document.getElementById('hud-score').textContent = st.score.toFixed(1);
+    document.getElementById('hud-best').textContent = st.bestEver.toFixed(1);
 
-    const list = document.getElementById('pop-list');
-    list.innerHTML = this.pop.agents.map((a, i) => {
-      const cls = [
-        i === this.pop.selected ? 'selected' : '',
-        a.alive ? '' : 'dead'
-      ].filter(Boolean).join(' ');
-      return `<div class="pop-item ${cls}" data-i="${i}">#${String(i).padStart(2,'0')}  ${a.score.toFixed(1)}${a.alive ? '' : ' ✕'}</div>`;
-    }).join('');
-
-    list.querySelectorAll('.pop-item').forEach(el => {
-      el.onclick = () => {
-        this.pop.selected = +el.dataset.i;
-        this.selectedEdge = -1;
-        this.update();
-      };
-    });
+    const list = document.getElementById('obj-list');
+    if (this.obj.list.length === 0) {
+      list.innerHTML = '<span style="color:#484f58">No objects placed</span>';
+    } else {
+      list.innerHTML = this.obj.list.map((o, i) =>
+        `${i + 1}. ${o.type} @ (${Math.round(o.x)},${Math.round(o.y)})`
+      ).join('<br>');
+    }
 
     this.drawBrain();
   }

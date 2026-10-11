@@ -10,7 +10,7 @@
   <div id="app">
     <header>
       <h1>NeuralEv</h1>
-      <p class="tagline">Stick figure driven by evolving neural connections · Generations · Scorer · Multi-Mode · Editor</p>
+      <p class="tagline">One stickman · Placeable objects · Help / Death / Falling hazards · Generations</p>
     </header>
 
     <div class="toolbar">
@@ -24,8 +24,7 @@
           <option value="balance">Balance</option>
           <option value="jump">Jump Height</option>
           <option value="reach">Reach Target</option>
-          <option value="dance">Dance Pattern</option>
-          <option value="climb">Climb</option>
+          <option value="survive">Survive Hazards</option>
           <option value="free">Free Play + Editor</option>
         </select>
       </label>
@@ -36,10 +35,21 @@
       <input type="file" id="file-import" accept=".nom,.neural-omni.nom" hidden>
     </div>
 
+    <div class="toolbar objects-bar">
+      <span class="label">Place object:</span>
+      <button class="obj-btn" data-type="help" title="Help pad – boosts score & energy">💚 Help</button>
+      <button class="obj-btn" data-type="death" title="Death zone – kills on touch">💀 Death</button>
+      <button class="obj-btn" data-type="fall" title="Falling hazard – drops from above">🪨 Fall</button>
+      <button class="obj-btn" data-type="platform" title="Platform – can stand on">🟫 Platform</button>
+      <button class="obj-btn" data-type="spring" title="Spring – launches upward">🔼 Spring</button>
+      <button id="btn-clear-objects" class="danger">Clear all objects</button>
+      <span class="hint-inline">Click canvas to place · Right-click object to remove</span>
+    </div>
+
     <div class="main">
       <div class="canvas-wrap">
         <canvas id="canvas" width="960" height="540"></canvas>
-        <div id="hud">Gen <span id="hud-gen">1</span> · Best <span id="hud-best">0</span></div>
+        <div id="hud">Gen <span id="hud-gen">1</span> · Trial <span id="hud-trial">1</span>/<span id="hud-pop">28</span> · Score <span id="hud-score">0</span> · Best <span id="hud-best">0</span></div>
       </div>
 
       <aside id="sidebar">
@@ -47,10 +57,12 @@
           <h3>Status</h3>
           <div id="stats" class="mono">
             Generation: <span id="gen">1</span><br>
-            Best Score: <span id="best">0</span><br>
-            Avg Score: <span id="avg">0</span><br>
-            Alive: <span id="alive">0</span><br>
-            Time: <span id="time">0.0</span>s
+            Trial: <span id="trial">1</span> / <span id="popsize">28</span><br>
+            Current Score: <span id="score">0</span><br>
+            Best this gen: <span id="best">0</span><br>
+            Best ever: <span id="bestever">0</span><br>
+            Time: <span id="time">0.0</span>s<br>
+            Alive: <span id="alive">yes</span>
           </div>
         </div>
 
@@ -58,32 +70,33 @@
           <h3>Neural Connections</h3>
           <canvas id="brain-canvas" width="280" height="240"></canvas>
           <div id="editor-panel" class="editor hidden">
-            <p class="hint">Click a connection (line) to select. Adjust weight:</p>
+            <p class="hint">Click a connection to select. Adjust weight:</p>
             <input type="range" id="weight-slider" min="-2" max="2" step="0.05" value="0">
             <span id="weight-val" class="mono">0.00</span>
-            <button id="btn-randomize-edge" class="small">Randomize selected</button>
+            <button id="btn-randomize-edge" class="small">Randomize</button>
             <button id="btn-zero-edge" class="small">Zero</button>
           </div>
           <p class="hint" id="editor-hint">Switch to <b>Free Play + Editor</b> to edit weights.</p>
         </div>
 
         <div class="panel">
-          <h3>Population</h3>
-          <div id="pop-list" class="mono"></div>
+          <h3>Objects on map</h3>
+          <div id="obj-list" class="mono small"></div>
         </div>
 
         <div class="panel">
           <h3>About</h3>
-          <p class="small">Stick figure = multi-segment body controlled by neural net torques. High scorers reproduce. File <code>.neural-omni.nom</code> is binary &amp; obfuscated. Agents stay inside the screen.</p>
+          <p class="small">Only <b>one</b> stickman at a time. When it dies, the next trial starts. Place Help, Death, Fall, Platform or Spring objects on the canvas. Evolution runs after all trials of a generation finish.</p>
         </div>
       </aside>
     </div>
 
-    <footer>NeuralEv · modular · stable physics · screen bounds · neural editor</footer>
+    <footer>NeuralEv · single stickman · placeable objects · generations</footer>
   </div>
 
   <script src="js/net.js"></script>
   <script src="js/stick.js"></script>
+  <script src="js/objects.js"></script>
   <script src="js/population.js"></script>
   <script src="js/export.js"></script>
   <script src="js/ui.js"></script>

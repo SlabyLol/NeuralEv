@@ -43,7 +43,12 @@ h1 {
   border: 1px solid #30363d;
   border-radius: 10px;
   padding: 10px 12px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+}
+
+.toolbar.objects-bar {
+  background: #0d1117;
+  border-style: dashed;
 }
 
 .toolbar button,
@@ -68,9 +73,19 @@ h1 {
   background: #238636;
   border-color: #2ea043;
 }
+.toolbar button.primary:hover { background: #2ea043; }
 
-.toolbar button.primary:hover {
-  background: #2ea043;
+.toolbar button.danger {
+  background: #3d1215;
+  border-color: #f85149;
+  color: #f85149;
+}
+.toolbar button.danger:hover { background: #5c1a1f; }
+
+.obj-btn.active {
+  border-color: #58a6ff;
+  background: #1f3a5f;
+  box-shadow: 0 0 0 1px #58a6ff;
 }
 
 .toolbar label {
@@ -85,6 +100,9 @@ h1 {
   width: 90px;
   accent-color: #58a6ff;
 }
+
+.label { color: #8b949e; font-size: 0.85rem; }
+.hint-inline { color: #484f58; font-size: 0.75rem; margin-left: 4px; }
 
 .main {
   display: flex;
@@ -163,7 +181,6 @@ h1 {
   flex-direction: column;
   gap: 6px;
 }
-
 .editor.hidden { display: none; }
 
 .editor input[type=range] {
@@ -180,26 +197,12 @@ button.small {
   font-size: 0.78rem;
   cursor: pointer;
 }
+button.small:hover { border-color: #58a6ff; }
 
-button.small:hover {
-  border-color: #58a6ff;
-}
-
-#pop-list {
-  max-height: 150px;
+#obj-list {
+  max-height: 120px;
   overflow-y: auto;
 }
-
-.pop-item {
-  padding: 3px 4px;
-  border-bottom: 1px solid #21262d;
-  cursor: pointer;
-  border-radius: 3px;
-}
-
-.pop-item:hover { background: #21262d; }
-.pop-item.selected { color: #3fb950; background: #0d1f12; }
-.pop-item.dead { color: #484f58; }
 
 .small { font-size: 0.78rem; color: #8b949e; }
 

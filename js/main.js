@@ -1,4 +1,4 @@
-/** NeuralEv – Main loop & canvas rendering */
+/** NeuralEv – Main loop, canvas, object placement */
 
 window.NeuralEv = {
   running: false,
@@ -11,24 +11,31 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
 const pop = new Population();
-const ui = new UI(pop);
+const objMan = new ObjectManager();
+const ui = new UI(pop, objMan);
 
-// Click canvas → select nearest agent
-canvas.addEventListener('click', e => {
+function canvasPos(e) {
   const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  const mx = (e.clientX - rect.left) * scaleX;
-  const my = (e.clientY - rect.top) * scaleY;
+  return {
+    x: (e.clientX - rect.left) * (canvas.width / rect.width),
+    y: (e.clientY - rect.top) * (canvas.height / rect.height)
+  };
+}
 
-  let best = 0, bestD = Infinity;
-  pop.agents.forEach((a, i) => {
-    const d = (a.x - mx) ** 2 + (a.y - my) ** 2;
-    if (d < bestD) { bestD = d; best = i; }
-  });
-  pop.selected = best;
-  ui.selectedEdge = -1;
-  ui.update();
+// Left click: place object OR (if no tool) nothing special
+canvas.addEventListener('click', e => {
+  const { x, y } = canvasPos(e);
+  if (objMan.placeType) {
+    objMan.add(objMan.placeType, x, y);
+    ui.update();
+  }
+});
+
+// Right click: remove object
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const { x, y } = canvasPos(e);
+  if (objMan.removeAt(x, y)) ui.update();
 });
 
 function drawScene() {
@@ -43,8 +50,8 @@ function drawScene() {
   ctx.lineTo(canvas.width, GROUND_Y);
   ctx.stroke();
 
-  // subtle grid
-  ctx.strokeStyle = '#161b22';
+  // grid
+  ctx.strokeStyle = '#12161c';
   ctx.lineWidth = 1;
   for (let x = 0; x < canvas.width; x += 80) {
     ctx.beginPath();
@@ -53,31 +60,29 @@ function drawScene() {
     ctx.stroke();
   }
 
-  // target for reach mode
+  // reach target
   if (ui.mode === 'reach') {
     ctx.fillStyle = '#f778ba';
     ctx.beginPath();
-    ctx.arc(780, GROUND_Y - 130, 12, 0, Math.PI * 2);
+    ctx.arc(800, GROUND_Y - 140, 12, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#f778ba';
-    ctx.globalAlpha = 0.3;
-    ctx.beginPath();
-    ctx.arc(780, GROUND_Y - 130, 28, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
   }
 
-  // draw agents (selected on top)
-  pop.agents.forEach((a, i) => {
-    if (i !== pop.selected) a.draw(ctx, 0.28, false);
-  });
-  if (pop.selectedAgent) {
-    pop.selectedAgent.draw(ctx, 1, true);
+  objMan.draw(ctx);
+
+  if (pop.current) pop.current.draw(ctx);
+
+  // placement preview hint
+  if (objMan.placeType) {
+    ctx.fillStyle = 'rgba(88,166,255,0.15)';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Click to place: ' + objMan.placeType.toUpperCase() + '  (right-click removes)', 12, canvas.height - 12);
   }
 }
 
 let last = performance.now();
 let frame = 0;
+let deathCooldown = 0;
 
 function loop(now) {
   const rawDt = Math.min(0.05, (now - last) / 1000);
@@ -86,11 +91,27 @@ function loop(now) {
 
   if (window.NeuralEv.running) {
     window.NeuralEv.simTime += dt;
-    const alive = pop.step(dt, ui.mode);
-    if (alive === 0 || window.NeuralEv.simTime > 18) {
-      pop.nextGeneration(window.NeuralEv.mutationRate);
-      window.NeuralEv.simTime = 0;
+    objMan.update(dt);
+
+    const alive = pop.step(dt, ui.mode, objMan.list);
+
+    if (!alive) {
+      deathCooldown += dt;
+      // short pause so you see the death, then next stickman
+      if (deathCooldown > 0.45) {
+        deathCooldown = 0;
+        pop.onDeath(window.NeuralEv.mutationRate);
+        objMan.resetFalls();
+        window.NeuralEv.simTime = 0;
+      }
+    } else {
+      deathCooldown = 0;
+      // time limit also ends trial
+      if (window.NeuralEv.simTime > 20) {
+        pop.current.alive = false;
+      }
     }
+
     frame++;
     if (frame % 2 === 0) ui.update();
   }

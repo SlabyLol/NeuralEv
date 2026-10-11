@@ -1,62 +1,53 @@
 # NeuralEv
 
-**Neural Omni Evolution** – Stick figures controlled by evolving neural connections.
+**Neural Omni Evolution** – One stickman at a time, placeable objects, neural evolution.
 
-## Features
+## Core rules
 
-- Multi-segment stick figure (torso, head, arms, thighs, shins) driven by neural torques
-- Stable physics with strong damping → no wild “fighting” oscillations
-- Agents **cannot leave the screen** (hard bounds + bounce)
-- 7 modes: Walk Right, Balance, Jump, Reach Target, Dance, Climb, Free Play + Editor
-- Generational evolution (elitism + crossover + mutation)
-- Live neural-connection visualization
-- **Neural Editor** (Free Play mode): click any connection, adjust weight with slider
-- Export / Import population as binary `.neural-omni.nom` (obfuscated, not human-readable)
-- Modular code structure
+- **Only one stickman** is active.
+- When it **dies**, the next trial (next genome) starts automatically.
+- After all trials of a generation finish → evolution (crossover + mutation) → next generation.
 
-## File layout
+## Placeable objects
+
+| Object | Effect |
+|--------|--------|
+| 💚 **Help** | Pickup: +score, +energy (respawns) |
+| 💀 **Death** | Touch → instant kill |
+| 🪨 **Fall** | Falls from above after delay, kills on hit, then resets |
+| 🟫 **Platform** | Solid surface to stand on |
+| 🔼 **Spring** | Launches stickman upward |
+
+**How to place:** choose a tool in the second toolbar → left-click on canvas.  
+**Remove:** right-click an object.
+
+## Modes
+
+Walk Right · Balance · Jump Height · Reach Target · Survive Hazards · Free Play + Editor
+
+## Files
 
 ```
 index.html
 css/style.css
-js/net.js          – neural network
-js/stick.js        – stick figure physics + drawing + screen bounds
-js/population.js   – population & generations
-js/export.js       – .neural-omni.nom binary format
-js/ui.js           – UI, brain view, editor
-js/main.js         – main loop & canvas
+js/net.js
+js/stick.js
+js/objects.js      ← placeable help / death / fall / platform / spring
+js/population.js   ← sequential single-stickman trials
+js/export.js
+js/ui.js
+js/main.js
 ```
 
-## .neural-omni.nom format
+## .neural-omni.nom
 
-Binary container (version 2):
-- Magic `NOM1`
-- Generation, population size, network size, architecture
-- Weights as float32 with XOR obfuscation
+Binary + obfuscated. Not human-readable in a text editor.
 
-Not intended for manual editing in a text editor.
+## GitHub Pages
 
-## Enable GitHub Pages
-
-1. Repo → **Settings** → **Pages**
-2. Source: **Deploy from a branch**
-3. Branch: `main` / `/ (root)`
-4. Save → https://slabylol.github.io/NeuralEv/
-
-## Controls
-
-| Control | Action |
-|---------|--------|
-| Play / Pause | Run simulation |
-| Step | Single physics step |
-| Reset | New random population |
-| Next Gen | Force next generation |
-| Mode | Change fitness objective |
-| Speed / Mutation | Simulation speed & mutation rate |
-| Export / Import | Save or load `.neural-omni.nom` |
-| Click stick / list | Select agent |
-| Free Play + click brain edge | Edit that connection weight |
+Settings → Pages → Deploy from branch `main` / root  
+→ https://slabylol.github.io/NeuralEv/
 
 ---
 
-NeuralEv · stable · bounded · editable · modular
+NeuralEv · single stickman · placeable objects · generations

@@ -1,72 +1,94 @@
-/** NeuralEv – Population & generation logic */
+/** NeuralEv – Sequential single-stickman trials + generations */
 
-const POP_SIZE = 28;
+const POP_SIZE = 24;
 
 class Population {
   constructor() {
-    this.agents = [];
+    this.genomes = [];   // array of Net weights / Nets
+    this.scores = [];
     this.generation = 1;
+    this.trialIndex = 0;
     this.bestEver = 0;
-    this.selected = 0;
+    this.bestThisGen = 0;
+    this.current = null; // active Stick
     this.init();
   }
 
   init() {
-    this.agents = [];
+    this.genomes = [];
+    this.scores = new Array(POP_SIZE).fill(0);
     for (let i = 0; i < POP_SIZE; i++) {
-      this.agents.push(new Stick(new Net()));
+      this.genomes.push(new Net());
     }
     this.generation = 1;
+    this.trialIndex = 0;
     this.bestEver = 0;
-    this.selected = 0;
+    this.bestThisGen = 0;
+    this.spawnCurrent();
   }
 
-  step(dt, mode) {
-    let alive = 0;
-    for (const a of this.agents) {
-      a.step(dt, mode);
-      if (a.score > this.bestEver) this.bestEver = a.score;
-      if (a.alive) alive++;
+  spawnCurrent() {
+    const net = this.genomes[this.trialIndex];
+    this.current = new Stick(new Net(net.w));
+  }
+
+  /** Call when current stick dies → next trial or next generation */
+  onDeath(mutationRate) {
+    const s = this.current.score;
+    this.scores[this.trialIndex] = s;
+    if (s > this.bestThisGen) this.bestThisGen = s;
+    if (s > this.bestEver) this.bestEver = s;
+
+    this.trialIndex++;
+    if (this.trialIndex >= POP_SIZE) {
+      this.nextGeneration(mutationRate);
+    } else {
+      this.spawnCurrent();
     }
-    return alive;
   }
 
   nextGeneration(mutationRate) {
-    this.agents.sort((a, b) => b.score - a.score);
-    const eliteCount = Math.max(3, Math.floor(POP_SIZE * 0.18));
-    const next = [];
+    // rank by score
+    const order = this.scores
+      .map((s, i) => ({ s, i }))
+      .sort((a, b) => b.s - a.s);
 
-    // elites (exact copies)
-    for (let i = 0; i < eliteCount; i++) {
-      next.push(new Stick(new Net(this.agents[i].net.w)));
+    const eliteCount = Math.max(3, Math.floor(POP_SIZE * 0.2));
+    const nextGenomes = [];
+
+    for (let e = 0; e < eliteCount; e++) {
+      nextGenomes.push(new Net(this.genomes[order[e].i].w));
     }
 
-    // offspring
-    while (next.length < POP_SIZE) {
-      const p1 = this.agents[Math.floor(Math.random() * eliteCount)];
-      const p2 = this.agents[Math.floor(Math.random() * eliteCount)];
-      const child = p1.net.crossover(p2.net).mutate(mutationRate);
-      next.push(new Stick(child));
+    while (nextGenomes.length < POP_SIZE) {
+      const p1 = this.genomes[order[Math.floor(Math.random() * eliteCount)].i];
+      const p2 = this.genomes[order[Math.floor(Math.random() * eliteCount)].i];
+      nextGenomes.push(p1.crossover(p2).mutate(mutationRate));
     }
 
-    this.agents = next;
+    this.genomes = nextGenomes;
+    this.scores = new Array(POP_SIZE).fill(0);
     this.generation++;
-    this.selected = 0;
+    this.trialIndex = 0;
+    this.bestThisGen = 0;
+    this.spawnCurrent();
   }
 
-  resetAll() {
-    for (const a of this.agents) a.reset();
+  step(dt, mode, objects) {
+    if (!this.current || !this.current.alive) return false;
+    this.current.step(dt, mode, objects);
+    return this.current.alive;
   }
 
-  get selectedAgent() {
-    return this.agents[this.selected];
-  }
-
-  stats() {
-    const scores = this.agents.map(a => a.score);
-    const best = Math.max(...scores, 0);
-    const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
-    const alive = this.agents.filter(a => a.alive).length;
-    return { best, avg, alive, gen: this.generation, bestEver: this.bestEver };
+  get stats() {
+    return {
+      gen: this.generation,
+      trial: this.trialIndex + 1,
+      pop: POP_SIZE,
+      score: this.current ? this.current.score : 0,
+      best: this.bestThisGen,
+      bestEver: this.bestEver,
+      alive: this.current && this.current.alive
+    };
   }
 }
